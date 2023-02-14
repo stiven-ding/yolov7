@@ -14,11 +14,11 @@ from models.experimental import attempt_load, End2End
 from utils.activations import Hardswish, SiLU
 from utils.general import set_logging, check_img_size
 from utils.torch_utils import select_device
-from utils.add_nms import RegisterNMS
+#from utils.add_nms import RegisterNMS
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='./yolor-csp-c.pt', help='weights path')
+    parser.add_argument('--weights', type=str, default='./yolov7-tiny.pt', help='weights path')
     parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='image size')  # height, width
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     parser.add_argument('--dynamic', action='store_true', help='dynamic ONNX axes')
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--topk-all', type=int, default=100, help='topk objects for every images')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='iou threshold for NMS')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='conf threshold for NMS')
-    parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--simplify', action='store_true', help='simplify onnx model')
     parser.add_argument('--include-nms', action='store_true', help='export end2end onnx')
     parser.add_argument('--fp16', action='store_true', help='CoreML FP16 half-precision export')
@@ -80,6 +80,17 @@ if __name__ == '__main__':
     except Exception as e:
         print('TorchScript export failure: %s' % e)
 
+    # TorchScript-Lite export
+    try:
+        print('\nStarting TorchScript-Lite export with torch %s...' % torch.__version__)
+        f = opt.weights.replace('.pt', '.torchscript.ptl')  # filename
+        tsl = torch.jit.trace(model, img, strict=False)
+        tsl = optimize_for_mobile(tsl)
+        tsl._save_for_lite_interpreter(f)
+        print('TorchScript-Lite export success, saved as %s' % f)
+    except Exception as e:
+        print('TorchScript-Lite export failure: %s' % e)
+
     # CoreML export
     try:
         import coremltools as ct
@@ -102,17 +113,6 @@ if __name__ == '__main__':
     except Exception as e:
         print('CoreML export failure: %s' % e)
                      
-    # TorchScript-Lite export
-    try:
-        print('\nStarting TorchScript-Lite export with torch %s...' % torch.__version__)
-        f = opt.weights.replace('.pt', '.torchscript.ptl')  # filename
-        tsl = torch.jit.trace(model, img, strict=False)
-        tsl = optimize_for_mobile(tsl)
-        tsl._save_for_lite_interpreter(f)
-        print('TorchScript-Lite export success, saved as %s' % f)
-    except Exception as e:
-        print('TorchScript-Lite export failure: %s' % e)
-
     # ONNX export
     try:
         import onnx
